@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vision Vend – The Future of Frictionless Retail</title>
-    <meta name="description" content="Transform any fridge into a self-checkout vending machine with Vision Vend's plug-and-play AI kit">
+    <title>Vision Vend</title>
+    <meta name="description" content="Transform any display fridge into a self-checkout vending machine with Vision Vend's plug-and-play AI kit">
     
     <!-- THREE & GSAP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -14,13 +14,10 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
@@ -30,10 +27,7 @@
             cursor: grab;
         }
         body:active { cursor: grabbing; }
-
         #canvas-container { position: fixed; inset: 0; }
-
-        /* UI */
         .ui-overlay {
             position: absolute;
             inset: 0;
@@ -45,7 +39,6 @@
             padding: 2rem;
             gap: 1rem;
         }
-
         .hero-text {
             grid-column: 2;
             grid-row: 2;
@@ -79,12 +72,12 @@
             font-size: 1.1rem;
             transition: transform .3s, box-shadow .3s;
             box-shadow: 0 0 20px rgba(0,255,170,.4);
+            text-decoration: none;
         }
         .cta-button:hover {
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 0 40px rgba(0,255,170,.7);
         }
-
         .info-panel {
             grid-column: 1;
             grid-row: 3;
@@ -98,8 +91,6 @@
         }
         .info-panel h3 { color: #00ffaa; margin-bottom: .5rem; }
         .info-panel p { font-size: .9rem; opacity: .8; line-height: 1.5; }
-
-        /* Loading */
         .loading-screen {
             position: fixed;
             inset: 0;
@@ -114,239 +105,260 @@
             animation: pulse 1.5s infinite;
         }
         @keyframes pulse { 0%,100%{opacity:.4;} 50%{opacity:1;} }
-
         @media (max-width: 600px) {
-            .ui-overlay { grid-template-columns: 1fr; }
-            .info-panel { grid-column: 1; grid-row: 3; margin-top: 1rem; }
+            .ui-overlay { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+            .hero-text { grid-row: 2; }
+            .info-panel { grid-row: 3; margin-top: 1rem; max-width: none; }
         }
     </style>
 </head>
 <body>
-
-    <!-- Loading -->
     <div class="loading-screen" id="loading">
-        <div class="loading-text">Powering Up Vision Vend…</div>
+        <div class="loading-text">Calibrating Vision Matrix...</div>
     </div>
-
-    <!-- WebGL -->
     <div id="canvas-container"></div>
-
-    <!-- UI -->
     <div class="ui-overlay">
         <div class="hero-text">
             <h1>Vision Vend</h1>
-            <p>Turn any fridge into a self-checkout vending machine in minutes</p>
-            <a href="#features" class="cta-button">Get Started</a>
+            <p>Convert any display case or display fridge into a self-checkout vending machine</p>
+            <a href="#" class="cta-button">Join The Collective</a>
         </div>
-
         <div class="info-panel">
             <h3>Plug & Play AI Kit</h3>
             <p>Vision + weight fusion, auto-checkout, 30-min install, zero code.</p>
         </div>
     </div>
 
+    <!-- Lens Flare Shader -->
+    <script type="x-shader/x-vertex" id="vertexshader">
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    </script>
+    <script type="x-shader/x-fragment" id="fragmentshader">
+        uniform sampler2D tDiffuse;
+        uniform vec2 u_lightPosition;
+        uniform float u_intensity;
+        varying vec2 vUv;
+        void main() {
+            vec2 a = vUv - u_lightPosition;
+            float d = length(a);
+            float l = 1.0 / (1.0 + 20.0 * d * d);
+            vec4 dif = texture2D(tDiffuse, vUv);
+            dif.rgb += l * u_intensity;
+            gl_FragColor = dif;
+        }
+    </script>
+
     <script>
-        /* --------------------------------------------------
-           SCENE & CAM
-        -------------------------------------------------- */
+        /* SCENE & CAM */
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x000000,.05);
-
-        const camera = new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,100);
-        camera.position.set(0,1.5,5);
-
-        const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-        renderer.setSize(innerWidth,innerHeight);
+        scene.fog = new THREE.FogExp2(0x000000, .05);
+        const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, .1, 1000);
+        camera.position.set(0, 1.5, 7);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(innerWidth, innerHeight);
         renderer.setPixelRatio(devicePixelRatio);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.0;
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        /* --------------------------------------------------
-           POST-PROCESSING
-        -------------------------------------------------- */
+        /* POST-PROCESSING */
         const composer = new THREE.EffectComposer(renderer);
-        const renderPass = new THREE.RenderPass(scene,camera);
-        composer.addPass(renderPass);
-
-        const bloomPass = new THREE.UnrealBloomPass(
-            new THREE.Vector2(innerWidth,innerHeight),
-            1.4,   // strength
-            .4,     // radius
-            .85     // threshold
-        );
+        composer.addPass(new THREE.RenderPass(scene, camera));
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.2, .4, .85);
         composer.addPass(bloomPass);
 
-        /* --------------------------------------------------
-           CONTROLS
-        -------------------------------------------------- */
-        const controls = new THREE.OrbitControls(camera,renderer.domElement);
+        /* NEW: LENS FLARE SHADER */
+        const lensFlarePass = new THREE.ShaderPass({
+            uniforms: {
+                "tDiffuse": { value: null },
+                "u_lightPosition": { value: new THREE.Vector2(0.5, 0.5) },
+                "u_intensity": { value: 0.15 }
+            },
+            vertexShader: document.getElementById('vertexshader').textContent,
+            fragmentShader: document.getElementById('fragmentshader').textContent,
+        });
+        composer.addPass(lensFlarePass);
+
+        /* CONTROLS */
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        controls.dampingFactor = .05;
-        controls.minDistance = 2;
-        controls.maxDistance = 10;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = .5;
+        controls.dampingFactor = .04;
+        controls.minDistance = 4;
+        controls.maxDistance = 15;
+        controls.enablePan = false;
+        controls.autoRotate = false; // Disabled for GSAP animation
 
-        /* --------------------------------------------------
-           LIGHTS – CINEMATIC LOW KEY
-        -------------------------------------------------- */
-        // Key light (harsh spotlight)
-        const keyLight = new THREE.SpotLight(0x00ffaa,3,25,Math.PI/4,.2,2);
-        keyLight.position.set(4,6,3);
+        /* NEW: GSAP CAMERA ANIMATION */
+        gsap.to(camera.position, {
+            duration: 40,
+            x: 5, y: 3, z: 8,
+            ease: "sine.inOut",
+            yoyo: true,
+            repeat: -1,
+            onUpdate: () => camera.lookAt(0, 1, 0)
+        });
+        gsap.to(camera.position, {
+            duration: 35,
+            x: -6, z: -7,
+            ease: "sine.inOut",
+            yoyo: true,
+            repeat: -1,
+            onUpdate: () => camera.lookAt(0, 1, 0)
+        });
+
+        /* LIGHTS */
+        const keyLight = new THREE.SpotLight(0x00ffaa, 8, 25, Math.PI / 4, .2, 2);
+        keyLight.position.set(4, 6, 3);
         keyLight.castShadow = true;
-        keyLight.shadow.mapSize.set(2048,2048);
+        keyLight.shadow.mapSize.set(2048, 2048);
         scene.add(keyLight);
-
-        // Rim light (purple)
-        const rimLight = new THREE.SpotLight(0x7c3aed,2,20,Math.PI/5,.3,2);
-        rimLight.position.set(-4,5,-4);
+        const rimLight = new THREE.SpotLight(0x7c3aed, 5, 20, Math.PI / 5, .3, 2);
+        rimLight.position.set(-4, 5, -4);
         scene.add(rimLight);
-
-        // Subtle fill
-        const fillLight = new THREE.RectAreaLight(0x00d4ff,2,5,5);
-        fillLight.position.set(0,3,0);
-        fillLight.lookAt(0,0,0);
+        const fillLight = new THREE.RectAreaLight(0x00d4ff, 2, 5, 5);
+        fillLight.position.set(0, 3, 0);
         scene.add(fillLight);
-
-        // Ground glow
-        const groundLight = new THREE.PointLight(0x00ffaa,.8,10);
-        groundLight.position.set(0,-.8,0);
+        const groundLight = new THREE.PointLight(0x00ffaa, 1.5, 10);
+        groundLight.position.set(0, -.8, 0);
         scene.add(groundLight);
 
-        /* --------------------------------------------------
-           GROUND
-        -------------------------------------------------- */
-        const groundGeo = new THREE.PlaneGeometry(30,30);
+        /* GROUND & NEW: LASER GRID */
+        const groundGeo = new THREE.PlaneGeometry(50, 50, 50, 50);
         const groundMat = new THREE.MeshStandardMaterial({
-            color:0x111111,
-            metalness:.9,
-            roughness:.1
+            color: 0x000000, metalness: .9, roughness: .2,
+            wireframe: true, transparent: true, opacity: 0.15,
         });
-        const ground = new THREE.Mesh(groundGeo,groundMat);
-        ground.rotation.x = -Math.PI/2;
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
         ground.position.y = -1;
-        ground.receiveShadow = true;
         scene.add(ground);
 
-        /* --------------------------------------------------
-           GLTF MASCOT
-        -------------------------------------------------- */
+        /* GLTF MASCOT */
         let mascot;
         const gltfLoader = new THREE.GLTFLoader();
-        gltfLoader.load('vending_machine_mascot.glb', gltf => {
+        gltfLoader.load('https://raw.githubusercontent.com/whoisspy/3d-landing-page/main/vending_machine_mascot.glb', gltf => {
             mascot = gltf.scene;
-            mascot.scale.set(2.2,2.2,2.2);
-            mascot.traverse(obj=>{
-                if(obj.isMesh){
+            mascot.scale.set(2.2, 2.2, 2.2);
+            mascot.position.y = -1;
+            mascot.traverse(obj => {
+                if (obj.isMesh) {
                     obj.castShadow = true;
                     obj.receiveShadow = true;
-                    obj.material.emissive = new THREE.Color(0x003322);
-                    obj.material.emissiveIntensity = .2;
+                    if (obj.material.emissive) {
+                        obj.material.emissive.set(0x003322);
+                        obj.material.emissiveIntensity = .3;
+                    }
                 }
             });
             scene.add(mascot);
-
-            // Breathing & idle animation
-            gsap.to(mascot.position,{y:"+=.08",duration:2,ease:"sine.inOut",yoyo:true,repeat:-1});
-            gsap.to(mascot.rotation,{y:Math.PI*2,duration:20,ease:"none",repeat:-1});
-
-            // Hide loader
-            gsap.to('#loading',{opacity:0,duration:.8,onComplete:()=>{document.getElementById('loading').style.display='none';}});
+            gsap.to(mascot.position, { y: "-=.08", duration: 2.5, ease: "sine.inOut", yoyo: true, repeat: -1 });
+            gsap.to(mascot.rotation, { y: Math.PI * 2, duration: 25, ease: "none", repeat: -1 });
+            gsap.to('#loading', { opacity: 0, duration: 1, delay: .5, onComplete: () => document.getElementById('loading').style.display = 'none' });
         });
 
-        /* --------------------------------------------------
-           FLOATING 3D TEXT
-        -------------------------------------------------- */
+        /* NEW: COMEDIC 3D TEXT */
         const textGroup = new THREE.Group();
         scene.add(textGroup);
-        const labels = ["AI Vision","Weight Fusion","Auto-Checkout","30-Min Install"];
-
-        labels.forEach((txt,i)=>{
+        const labels = [
+            "Unblinking AI Overlords",
+            "Your Fridge Now Has A Job",
+            "Acquire. Consume. Repeat.",
+            "Assimilation In 30 Mins"
+        ];
+        labels.forEach((txt, i) => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = 512;
-            canvas.height = 128;
+            canvas.width = 1024; canvas.height = 128;
             ctx.fillStyle = '#00ffaa';
-            ctx.font = 'bold 48px Inter';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(txt,256,64);
+            ctx.font = 'bold 52px Inter';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(txt.toUpperCase(), 512, 64);
             const tex = new THREE.CanvasTexture(canvas);
-            const mat = new THREE.MeshBasicMaterial({
-                map:tex,
-                transparent:true,
-                side:THREE.DoubleSide
-            });
-            const geo = new THREE.PlaneGeometry(2.2,.55);
-            const mesh = new THREE.Mesh(geo,mat);
-            const ang = (i/labels.length)*Math.PI*2;
-            mesh.position.set(Math.cos(ang)*4.5,1.5+Math.sin(i)*.6,Math.sin(ang)*4.5);
-            mesh.lookAt(0,1.5,0);
+            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, opacity: 0.8 });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(4, .5), mat);
+            const ang = (i / labels.length) * Math.PI * 2;
+            mesh.position.set(Math.cos(ang) * 4.5, 1.5 + Math.sin(i * 3) * .6, Math.sin(ang) * 4.5);
+            mesh.lookAt(0, 1.5, 0);
             textGroup.add(mesh);
         });
+        gsap.to(textGroup.rotation, { y: Math.PI * 2, duration: 20, ease: "none", repeat: -1 });
 
-        gsap.to(textGroup.rotation,{y:Math.PI*2,duration:18,ease:"none",repeat:-1});
+        /* NEW: ELECTRIC ARCS */
+        const arcsGroup = new THREE.Group();
+        scene.add(arcsGroup);
+        function createArc() {
+            if(arcsGroup.children.length > 0) {
+                arcsGroup.remove(arcsGroup.children[0]);
+            }
+            if (textGroup.children.length < 2) return;
+            const startNode = textGroup.children[Math.floor(Math.random() * textGroup.children.length)];
+            const endNode = mascot ? mascot : textGroup.children[Math.floor(Math.random() * textGroup.children.length)];
+            const startPos = startNode.getWorldPosition(new THREE.Vector3());
+            const endPos = endNode.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1, 0));
+            
+            const curve = new THREE.CatmullRomCurve3([
+                startPos,
+                startPos.clone().lerp(endPos, 0.5).add(new THREE.Vector3(Math.random()-0.5, Math.random()*2, Math.random()-0.5)),
+                endPos
+            ]);
 
-        /* --------------------------------------------------
-           PARTICLES
-        -------------------------------------------------- */
-        const particleGeo = new THREE.BufferGeometry();
-        const particleCnt = 300;
-        const positions = new Float32Array(particleCnt*3);
-        const velocities = [];
-        for(let i=0;i<particleCnt*3;i+=3){
-            positions[i]=(Math.random()-.5)*20;
-            positions[i+1]=Math.random()*10;
-            positions[i+2]=(Math.random()-.5)*20;
-            velocities.push(
-                (Math.random()-.5)*.008,
-                -Math.random()*.008,
-                (Math.random()-.5)*.008
-            );
+            const points = curve.getPoints(30);
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const mat = new THREE.LineBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending });
+            const arc = new THREE.Line(geo, mat);
+            arcsGroup.add(arc);
+            gsap.to(mat, { opacity: 0, duration: 0.5, delay: 0.2 });
         }
-        particleGeo.setAttribute('position', new THREE.BufferAttribute(positions,3));
-        const particleMat = new THREE.PointsMaterial({
-            color:0x00ffaa,
-            size:.06,
-            transparent:true,
-            opacity:.7,
-            blending:THREE.AdditiveBlending
-        });
-        const particles = new THREE.Points(particleGeo,particleMat);
+        setInterval(createArc, 1000 + Math.random() * 2000);
+
+        /* PARTICLES */
+        const particleGeo = new THREE.BufferGeometry();
+        const particleCnt = 400;
+        const positions = new Float32Array(particleCnt * 3);
+        for (let i = 0; i < particleCnt * 3; i += 3) {
+            positions[i] = (Math.random() - .5) * 20;
+            positions[i+1] = Math.random() * 10 - 2;
+            positions[i+2] = (Math.random() - .5) * 20;
+        }
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particleMat = new THREE.PointsMaterial({ color: 0x00ffaa, size: .05, transparent: true, opacity: .6, blending: THREE.AdditiveBlending });
+        const particles = new THREE.Points(particleGeo, particleMat);
         scene.add(particles);
 
-        /* --------------------------------------------------
-           ANIMATE
-        -------------------------------------------------- */
-        function animate(){
+        /* ANIMATE */
+        const clock = new THREE.Clock();
+        function animate() {
             requestAnimationFrame(animate);
-
-            // Update particles
+            const delta = clock.getDelta();
             const pos = particles.geometry.attributes.position.array;
-            for(let i=0;i<pos.length;i+=3){
-                pos[i]+=velocities[i];
-                pos[i+1]+=velocities[i+1];
-                pos[i+2]+=velocities[i+2];
-                if(pos[i+1]<-1) pos[i+1]=10;
+            for (let i = 0; i < pos.length; i += 3) {
+                pos[i+1] -= .8 * delta;
+                if (pos[i+1] < -2) pos[i+1] = 10;
             }
             particles.geometry.attributes.position.needsUpdate = true;
-
+            
+            // Update lens flare position
+            const lightPos = new THREE.Vector3().copy(keyLight.position);
+            const screenPos = lightPos.project(camera);
+            lensFlarePass.uniforms.u_lightPosition.value.x = (screenPos.x + 1) / 2;
+            lensFlarePass.uniforms.u_lightPosition.value.y = (screenPos.y + 1) / 2;
+            
             controls.update();
-            composer.render();
+            composer.render(delta);
         }
         animate();
 
-        /* --------------------------------------------------
-           HANDLE RESIZE
-        -------------------------------------------------- */
-        addEventListener('resize',()=>{
-            camera.aspect = innerWidth/innerHeight;
+        /* HANDLE RESIZE */
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(innerWidth,innerHeight);
-            composer.setSize(innerWidth,innerHeight);
+            renderer.setSize(innerWidth, innerHeight);
+            composer.setSize(innerWidth, innerHeight);
         });
     </script>
 </body>

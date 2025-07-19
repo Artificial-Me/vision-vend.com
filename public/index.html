@@ -92,6 +92,21 @@
             `,
           };
         }
+
+        // Verify THREE.ShaderPass exists and is a constructor
+        if (typeof THREE.ShaderPass !== 'function') {
+          console.error('ShaderPass not loaded or not a constructor - falling back to basic implementation');
+          THREE.ShaderPass = function(shader) {
+            this.uniforms = THREE.UniformsUtils.clone(shader.uniforms);
+            this.material = new THREE.ShaderMaterial({
+              uniforms: this.uniforms,
+              vertexShader: shader.vertexShader,
+              fragmentShader: shader.fragmentShader
+            });
+            this.enabled = true;
+            this.needsSwap = true;
+          };
+        }
     </script>
 
     <script src="script.js"></script>

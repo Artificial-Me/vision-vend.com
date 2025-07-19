@@ -14,6 +14,8 @@ document.getElementById('canvas-container').appendChild(renderer.domElement);
 /* POST-PROCESSING */
 const composer = new THREE.EffectComposer(renderer);
 composer.addPass(new THREE.RenderPass(scene, camera));
+console.log('ShaderPass status: ', typeof THREE.ShaderPass === 'function' ? 'Constructor loaded successfully' : 'Using fallback implementation');
+console.log('EffectComposer initialized with ShaderPass: ', THREE.ShaderPass);
 const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.2, .4, .85);
 composer.addPass(bloomPass);
 
